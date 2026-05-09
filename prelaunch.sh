@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_NAME="payloads"
+PROJECT_NAME="wifisentry"
 
 REQUIRED_COMMANDS=(
   nmcli
@@ -27,7 +27,7 @@ fail() {
 
 need_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    fail "Ejecuta este script con sudo o como root."
+    fail "Run this script with sudo or as root."
   fi
 }
 

@@ -125,7 +125,7 @@ def resolve_target_input(
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="payloads: defensive assessment and active validation toolkit."
+        description="wifisentry: defensive assessment and active validation toolkit."
     )
     parser.add_argument("-i", "--interface", help="WiFi interface to use, for example wlan0.")
     parser.add_argument("--ssid", help="Target SSID.")

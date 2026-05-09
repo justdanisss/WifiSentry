@@ -1,8 +1,10 @@
-# WifiSentry
+# wifisentry
 
-WifiSentry is a Python-based toolkit for WiFi assessment workflows in controlled and authorized environments. It combines passive network inventory, configuration risk analysis, structured reporting, workspace-based evidence collection, and an active validation pipeline designed for lab use.
+wifisentry is a Python-based toolkit for WiFi assessment workflows in controlled and authorized environments. It combines passive network inventory, configuration risk analysis, structured reporting, workspace-based evidence collection, and an active validation pipeline designed for lab use.
 
 The project is organized as a modular package so scanning, analysis, reporting, workspace management, and active routines can evolve independently without turning the codebase into a monolith.
+
+The project brand is `wifisentry`; the internal Python package lives under `payloads/`.
 
 ## Features
 
@@ -23,6 +25,7 @@ The project is organized as a modular package so scanning, analysis, reporting, 
 ├── main.py
 ├── prelaunch.sh
 ├── README.md
+├── LICENSE
 └── payloads
     ├── analysis.py
     ├── cli.py
@@ -117,4 +120,10 @@ This layer is intentionally separate from scanning and reporting so it can evolv
 
 ## License
 
-No license has been defined yet. Add one before public distribution if needed.
+This project is distributed under the MIT License. See [LICENSE](LICENSE) for the full text.
+
+## Disclaimer
+
+This software is provided for educational, research, and authorized assessment use only.
+
+The author assumes no responsibility for misuse, damage, legal consequences, service disruption, data loss, or any other outcome resulting from the use of this project. You are solely responsible for ensuring that your use complies with applicable laws, regulations, contracts, and authorization requirements.

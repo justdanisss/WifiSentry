@@ -1,6 +1,6 @@
 from pathlib import Path
 
-APP_NAME = "payloads"
+APP_NAME = "wifisentry"
 APP_VERSION = "4.0.0"
 
 # Default output paths
