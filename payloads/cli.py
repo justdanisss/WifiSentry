@@ -6,6 +6,7 @@ import sys
 import time
 from pathlib import Path
 
+from payloads.analysis import analyze_network, severity_score
 from payloads.config import (
     APP_NAME,
     APP_VERSION,
@@ -14,7 +15,6 @@ from payloads.config import (
     DEFAULT_LOG_PATH,
     DEFAULT_REPORT_PATH,
 )
-from payloads.analysis import analyze_network, severity_score
 from payloads.models import AssessmentContext, AssessmentResult
 from payloads.offensive import maybe_run_offensive_extensions
 from payloads.reporting import (
@@ -27,13 +27,24 @@ from payloads.reporting import (
 from payloads.scanning import (
     demo_networks,
     detect_interfaces,
-    list_networks,
     scan_networks,
     select_target,
 )
-from payloads.system import check_root, configure_logging, require_command, validate_environment
 from payloads.strategy import build_review_plan, detect_ssid_profiles, serialize_plan, serialize_profile
-from payloads.ui import confirm_action
+from payloads.system import check_root, configure_logging, require_command, validate_environment
+from payloads.ui import (
+    confirm_action,
+    cyan,
+    dim,
+    format_interfaces,
+    format_network_table,
+    green,
+    print_banner,
+    print_kv,
+    print_section,
+    red,
+    yellow,
+)
 from payloads.workspace_manager import WorkspaceManager
 
 log = logging.getLogger(__name__)
@@ -72,14 +83,13 @@ def resolve_interface_input(args: argparse.Namespace) -> str | None:
     if len(interfaces) == 1:
         return interfaces[0]
     if args.assume_yes:
-        raise RuntimeError("You must provide -i/--interface when multiple WiFi interfaces are available and --assume-yes is used.")
+        raise RuntimeError(
+            "You must provide -i/--interface when multiple WiFi interfaces are available and --assume-yes is used."
+        )
 
     print()
-    print("Multiple WiFi interfaces were detected:")
-    for index, interface_name in enumerate(interfaces, start=1):
-        print(f"{index:>2}. {interface_name}")
-
-    user_value = input("\nEnter the interface number: ").strip()
+    print(format_interfaces(interfaces))
+    user_value = input(f"\n{dim('Select interface number')} {cyan('>')} ").strip()
     if not user_value:
         raise RuntimeError("No interface was selected.")
     if not user_value.isdigit():
@@ -107,9 +117,8 @@ def resolve_target_input(
         raise RuntimeError("You must provide --ssid or --bssid when using --assume-yes in live mode.")
 
     print()
-    print("No explicit target was provided. Detected networks:")
-    print(list_networks(networks))
-    user_value = input("\nEnter the target number: ").strip()
+    print(format_network_table(networks, title="Choose a target network"))
+    user_value = input(f"\n{dim('Select target number')} {cyan('>')} ").strip()
     if not user_value:
         raise RuntimeError("No target was provided.")
     if not user_value.isdigit():
@@ -143,13 +152,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--assume-yes", action="store_true", help="Skip the interactive confirmation prompt.")
     parser.add_argument("--log-file", default=str(DEFAULT_LOG_PATH), help="Log file path.")
     parser.add_argument("--version", action="version", version=f"{APP_NAME} {APP_VERSION}")
-    
+
     return parser.parse_args(argv)
 
 
 def run_auditor(args: argparse.Namespace) -> int:
     try:
-        # --- 1. INITIAL SETUP ---
+        print_banner(APP_NAME, APP_VERSION)
+
         if not args.demo and not args.list_interfaces:
             require_command("nmcli")
 
@@ -159,15 +169,13 @@ def run_auditor(args: argparse.Namespace) -> int:
         if args.list_interfaces:
             interfaces = detect_interfaces()
             if not interfaces:
-                print("No WiFi interfaces were detected.")
+                print(yellow("No WiFi interfaces were detected."))
                 return 1
-            for interface in interfaces:
-                print(interface)
+            print(format_interfaces(interfaces))
             return 0
 
         selected_interface = resolve_interface_input(args)
 
-        # Mode selection
         if args.demo:
             networks = demo_networks()
             mode = "demo"
@@ -176,19 +184,14 @@ def run_auditor(args: argparse.Namespace) -> int:
             mode = "live scan"
 
         if args.list_networks:
-            print(list_networks(networks))
+            print(format_network_table(networks))
             return 0
 
-        # Target selection
         target_ssid, target_bssid, target_source = resolve_target_input(args, networks)
         target = select_target(networks, ssid=target_ssid, bssid=target_bssid)
 
-        # Active context configuration
-        if args.passive:
-            offensive_requests = ()
-        else:
-            offensive_requests = ("auto", "wps", "pmkid", "eapol", "crack")
-        
+        offensive_requests = () if args.passive else ("auto", "wps", "pmkid", "eapol", "crack")
+
         context = AssessmentContext(
             interface=selected_interface,
             mode=mode,
@@ -198,12 +201,18 @@ def run_auditor(args: argparse.Namespace) -> int:
         )
         environment_notes = validate_environment(mode)
 
-        scope_message = f"Authorized scope confirmation for target {target.display_name} ({target.bssid})."
+        print_section("Execution plan")
+        print_kv("Mode", mode)
+        print_kv("Interface", selected_interface or "auto")
+        print_kv("Target", f"{target.display_name} ({target.bssid})")
+        print_kv("Selection", target_source)
+        print_kv("Workflow", "passive only" if args.passive else "passive + active")
+
+        scope_message = f"Use target {target.display_name} ({target.bssid})?"
         if not confirm_action(scope_message, assume_yes=context.assume_yes):
-            print("Operation cancelled by user.")
+            print(yellow("Operation cancelled by user."))
             return 1
 
-        # --- 2. PASSIVE PHASE AND WORKSPACE SETUP ---
         findings, vectors = analyze_network(target)
         workspace_manager = WorkspaceManager("workspaces", target.bssid)
 
@@ -212,8 +221,7 @@ def run_auditor(args: argparse.Namespace) -> int:
         workspace_manager.save_metadata("mode", mode)
         workspace_manager.save_metadata("target_source", target_source)
         workspace_manager.save_metadata("offensive_requests", list(offensive_requests))
-        
-        # SSID profile detection and review plan
+
         detected_profiles = detect_ssid_profiles(target.ssid)
         review_plan = build_review_plan(target)
         workspace_manager.save_metadata(
@@ -230,7 +238,7 @@ def run_auditor(args: argparse.Namespace) -> int:
             workspace=workspace_manager.workspace_path,
             findings=findings,
             vectors=vectors,
-            environment_notes=environment_notes
+            environment_notes=environment_notes,
         )
         assessment.add_attack_step("Passive analysis completed.")
         if detected_profiles:
@@ -238,7 +246,11 @@ def run_auditor(args: argparse.Namespace) -> int:
                 "SSID profile matches: " + ", ".join(profile.name for profile in detected_profiles)
             )
 
-        # Generate initial reports
+        print_section("Passive phase")
+        print_kv("Findings", str(len(findings)))
+        print_kv("Risk score", f"{severity_score(findings)}/100")
+        print_kv("Workspace", str(workspace_manager.workspace_path.resolve()))
+
         output_path = Path(args.output)
         report_md = build_markdown_report(assessment, networks, context)
         write_report(report_md, output_path)
@@ -250,15 +262,18 @@ def run_auditor(args: argparse.Namespace) -> int:
             write_html_report(build_html_report(assessment, networks, context), html_output_path)
             workspace_manager.save_metadata("html_report", str(html_output_path.resolve()))
 
-        # --- 3. ACTIVE PHASE ---
         if not args.passive:
             if args.demo:
                 log.info("Simulating active workflow in demo mode...")
+                print_section("Active phase")
+                print_kv("Mode", "demo simulation")
                 time.sleep(2)
                 assessment.cracked_password = "ProfeApruebame123"
                 assessment.add_attack_step("Demo mode: simulated credential recovered.")
                 workspace_manager.save_metadata("compromised", True)
             else:
+                print_section("Active phase")
+                print_kv("Mode", "live execution")
                 cracked = maybe_run_offensive_extensions(
                     context,
                     assessment.target,
@@ -275,7 +290,6 @@ def run_auditor(args: argparse.Namespace) -> int:
         else:
             workspace_manager.save_metadata("compromised", False)
 
-        # --- 4. FINAL REPORT UPDATE ---
         if assessment.is_compromised:
             final_report = build_markdown_report(assessment, networks, context)
             write_report(final_report, output_path)
@@ -295,28 +309,28 @@ def run_auditor(args: argparse.Namespace) -> int:
         if archive_path is not None:
             workspace_manager.save_metadata("archive_file", str(archive_path.resolve()))
 
-        print(f"\n{APP_NAME} v{APP_VERSION} - Final Summary")
-        print(f"Target: {assessment.target.display_name} ({assessment.target.bssid})")
-        print(f"Findings: {len(assessment.findings)}")
-        print(f"Risk score: {severity_score(assessment.findings)}/100")
-        print(f"Workspace: {assessment.workspace.resolve()}")
-        print(f"Inventory: {inventory_path.resolve()}")
-        print(f"Captured artifacts: {len(assessment.captured_files)}")
+        print_section("Final summary")
+        print_kv("Target", f"{assessment.target.display_name} ({assessment.target.bssid})")
+        print_kv("Findings", str(len(assessment.findings)))
+        print_kv("Risk score", f"{severity_score(assessment.findings)}/100")
+        print_kv("Workspace", str(assessment.workspace.resolve()))
+        print_kv("Inventory", str(inventory_path.resolve()))
+        print_kv("Artifacts", str(len(assessment.captured_files)))
         if assessment.is_compromised:
-            print(f"🔥 STATUS: NETWORK COMPROMISED (Password: {assessment.cracked_password})")
+            print_kv("Status", red(f"COMPROMISED  |  password: {assessment.cracked_password}"))
         else:
-            print("🛡️ STATUS: No credentials were recovered.")
-        print(f"Report: {output_path.resolve()}")
+            print_kv("Status", green("No credentials were recovered"))
+        print_kv("Markdown", str(output_path.resolve()))
         if not args.no_html:
-            print(f"HTML report: {html_output_path.resolve()}")
+            print_kv("HTML", str(html_output_path.resolve()))
         if archive_path is not None:
-            print(f"Evidence archive: {archive_path.resolve()}")
-        
+            print_kv("Archive", str(archive_path.resolve()))
+
         return 0
 
     except RuntimeError as exc:
         log.error(f"Critical error: {exc}")
-        print(f"Error: {exc}", file=sys.stderr)
+        print(red(f"Error: {exc}"), file=sys.stderr)
         return 2
 
 
@@ -326,7 +340,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return run_auditor(args)
     except KeyboardInterrupt:
-        print("\n\nInterrupt detected. Cleaning up state and exiting...")
+        print(yellow("\n\nInterrupt detected. Cleaning up state and exiting..."))
         return 130
 
 

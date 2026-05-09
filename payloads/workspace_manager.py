@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -18,17 +19,30 @@ class WorkspaceManager:
 
     def __init__(self, base_dir: str | Path, target_bssid: str):
         if not target_bssid:
-            raise ValueError("Se necesita un BSSID para aislar el workspace.")
+            raise ValueError("A BSSID is required to isolate the workspace.")
 
         self.safe_bssid = target_bssid.replace(':', '').upper()
-        self.workspace_path = Path(base_dir) / self.safe_bssid
+        self.base_dir = Path(base_dir)
+        self.workspace_path = self.base_dir / self.safe_bssid
         self._ensure_directories()
         if not self.get_metadata("created_at"):
             self.save_metadata("created_at", datetime.now().isoformat())
 
     def _ensure_directories(self) -> None:
-        """Asegura que el directorio del objetivo exista."""
-        self.workspace_path.mkdir(parents=True, exist_ok=True)
+        """Ensure the target workspace exists, with a writable fallback in /tmp."""
+        try:
+            self.workspace_path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            fallback_base = Path(os.environ.get("WIFISENTRY_TMP_WORKSPACES", "/tmp/wifisentry-workspaces"))
+            fallback_base.mkdir(parents=True, exist_ok=True)
+            self.workspace_path = fallback_base / self.safe_bssid
+            self.workspace_path.mkdir(parents=True, exist_ok=True)
+            log.warning(
+                "Could not create workspace in %s (%s). Falling back to %s",
+                self.base_dir,
+                exc,
+                self.workspace_path,
+            )
         log.debug(f"Workspace ready at: {self.workspace_path}")
 
     def get_path(self, file_purpose: str) -> Path:
