@@ -1,6 +1,6 @@
-# payloads
+# WifiSentry
 
-payloads is a Python-based toolkit for WiFi assessment workflows in controlled and authorized environments. It combines passive network inventory, configuration risk analysis, structured reporting, workspace-based evidence collection, and an active validation pipeline designed for lab use.
+WifiSentry is a Python-based toolkit for WiFi assessment workflows in controlled and authorized environments. It combines passive network inventory, configuration risk analysis, structured reporting, workspace-based evidence collection, and an active validation pipeline designed for lab use.
 
 The project is organized as a modular package so scanning, analysis, reporting, workspace management, and active routines can evolve independently without turning the codebase into a monolith.
 
