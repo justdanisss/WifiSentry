@@ -4,7 +4,7 @@ import os
 import sys
 from typing import Iterable
 
-from payloads.models import WifiNetwork
+from core.models import WifiNetwork
 
 
 def use_color() -> bool:
@@ -116,6 +116,7 @@ def format_network_table(networks: list[WifiNetwork], title: str = "Detected net
         f"  {dim('#'):>3}  "
         f"{dim('SSID'):<{ssid_width}}  "
         f"{dim('CH'):>3}  "
+        f"{dim('BAND'):>6}  "
         f"{dim('SIG'):>4}  "
         f"{dim('BAR'):7}  "
         f"{dim('SECURITY'):<18}  "
@@ -132,6 +133,7 @@ def format_network_table(networks: list[WifiNetwork], title: str = "Detected net
             f"  {cyan(str(index).rjust(2) + '.'):>5} "
             f"{ssid:<{ssid_width}}  "
             f"{network.channel:>3}  "
+            f"{network.band:>6}  "
             f"{network.signal:>3}%  "
             f"{signal_bar(network.signal):7}  "
             f"{security_badge(network.security):<18}  "

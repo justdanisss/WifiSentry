@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from payloads.cli import main
+from core.cli import main
 
 
 if __name__ == "__main__":

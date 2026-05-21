@@ -6,10 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from payloads.config import APP_NAME, APP_VERSION
-from payloads.analysis import classify_risk, severity_score
-from payloads.models import AssessmentContext, AssessmentResult, WifiNetwork
-from payloads.scanning import list_networks
+from core.config import APP_NAME, APP_VERSION
+from core.analysis import classify_risk, severity_score
+from core.models import AssessmentContext, AssessmentResult, WifiNetwork
+from core.scanning import list_networks
 
 
 def executive_summary(assessment: AssessmentResult, score: int) -> str:
@@ -106,6 +106,7 @@ def build_markdown_report(
         f"- Target SSID: `{assessment.target.display_name}`",
         f"- Target BSSID: `{assessment.target.bssid}`",
         f"- Channel: `{assessment.target.channel}`",
+        f"- Band: `{assessment.target.band}`",
         f"- Signal: `{assessment.target.signal}%`",
         f"- Security: `{assessment.target.security}`",
         f"- Risk score: `{score}/100`",
@@ -144,6 +145,26 @@ def build_markdown_report(
         for step in assessment.attack_log:
             lines.append(f"- {step}")
         lines.append("")
+
+    if assessment.dual_band_result is not None:
+        result = assessment.dual_band_result
+        parity = (
+            "yes" if result.same_password is True
+            else "no" if result.same_password is False
+            else "not verified"
+        )
+        lines.extend([
+            "## Dual-Band Check",
+            "",
+            f"- Target band: `{assessment.target.band}`",
+            f"- Sibling SSID: `{result.sibling.display_name}`",
+            f"- Sibling BSSID: `{result.sibling.bssid}`",
+            f"- Sibling band: `{result.sibling.band}`",
+            f"- PSK parity: `{parity}`",
+            f"- Method: `{result.method}`",
+            f"- Note: {result.note}",
+            "",
+        ])
 
     metadata = load_workspace_metadata(assessment)
     ssid_profiles = metadata.get("ssid_profiles", [])
@@ -239,6 +260,29 @@ def build_markdown_report(
                 "",
             ])
 
+
+    # --- Third-party tool results ---
+    if getattr(assessment, "third_party_results", None):
+        lines.extend(["## Third-Party Assessment", ""])
+        lines.append(
+            "The following research tools from the bundled `third-party/` tree were "
+            "invoked as part of the active phase. Results are indicative and require "
+            "human validation before drawing conclusions."
+        )
+        lines.append("")
+        for tp in assessment.third_party_results:
+            status_icon = "🔴" if tp.success else ("🟡" if tp.ran else "⚪")
+            status_label = "VULNERABLE" if tp.success else ("Ran / Not confirmed" if tp.ran else "Skipped")
+            lines.extend([
+                f"### {status_icon} {tp.tool} — {status_label}",
+                "",
+                tp.note or "_No output available._",
+                "",
+            ])
+            if tp.output:
+                lines.extend(["<details><summary>Raw output (truncated)</summary>", "", "```", tp.output[:800], "```", "</details>", ""])
+        lines.append("")
+
     lines.extend([
         "## Documented Vectors", "",
         "| Vector | Feasible | Difficulty | Tools |",
@@ -259,13 +303,14 @@ def build_markdown_report(
 
     lines.extend([
         "## Nearby Networks", "",
-        "| SSID | BSSID | Channel | Signal | Security |",
-        "| --- | --- | --- | ---: | --- |",
+        "| SSID | BSSID | Channel | Band | Signal | Security |",
+        "| --- | --- | --- | --- | ---: | --- |",
     ])
     for network in all_networks:
         lines.append(
             f"| {escape_markdown_table(network.display_name)} | {network.bssid} | "
-            f"{network.channel} | {network.signal}% | {escape_markdown_table(network.security)} |"
+            f"{network.channel} | {network.band} | {network.signal}% | "
+            f"{escape_markdown_table(network.security)} |"
         )
 
     lines.extend([
@@ -310,6 +355,31 @@ def build_html_report(assessment: AssessmentResult, all_networks: list[WifiNetwo
         <div class="panel">
             <h2>Attack Log</h2>
             <ul>{attack_log_items}</ul>
+        </div>
+        """
+
+    dual_band_html = ""
+    if assessment.dual_band_result is not None:
+        result = assessment.dual_band_result
+        parity = (
+            "yes" if result.same_password is True
+            else "no" if result.same_password is False
+            else "not verified"
+        )
+        dual_band_html = f"""
+        <div class="panel">
+            <h2>Dual-Band Check</h2>
+            <table class="artifact-table">
+                <tbody>
+                    <tr><th>Target Band</th><td>{html.escape(assessment.target.band)}</td></tr>
+                    <tr><th>Sibling SSID</th><td>{html.escape(result.sibling.display_name)}</td></tr>
+                    <tr><th>Sibling BSSID</th><td>{html.escape(result.sibling.bssid)}</td></tr>
+                    <tr><th>Sibling Band</th><td>{html.escape(result.sibling.band)}</td></tr>
+                    <tr><th>PSK Parity</th><td>{html.escape(parity)}</td></tr>
+                    <tr><th>Method</th><td>{html.escape(result.method)}</td></tr>
+                    <tr><th>Note</th><td>{html.escape(result.note)}</td></tr>
+                </tbody>
+            </table>
         </div>
         """
 
@@ -426,7 +496,7 @@ def build_html_report(assessment: AssessmentResult, all_networks: list[WifiNetwo
     body {{ font-family: Arial, sans-serif; margin: 2rem auto; max-width: 1080px; line-height: 1.5; color: #1f2937; background: #f8fafc; }}
     .shell {{ background: white; border: 1px solid #dbe4ee; border-radius: 12px; overflow: hidden; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08); }}
     .topbar {{ padding: 1rem 1.25rem; background: #0f172a; color: white; font-weight: 700; }}
-    .summary {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; padding: 1.5rem; border-bottom: 1px solid #e5e7eb; }}
+    .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; padding: 1.5rem; border-bottom: 1px solid #e5e7eb; }}
     .stat {{ background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem; }}
     .stat-label {{ font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }}
     .stat-value {{ font-size: 1rem; margin-top: 0.35rem; color: #0f172a; font-weight: 700; word-break: break-word; }}
@@ -449,10 +519,12 @@ def build_html_report(assessment: AssessmentResult, all_networks: list[WifiNetwo
       <div class="stat"><div class="stat-label">Target</div><div class="stat-value">{html.escape(assessment.target.display_name)}</div></div>
       <div class="stat"><div class="stat-label">BSSID</div><div class="stat-value">{html.escape(assessment.target.bssid)}</div></div>
       <div class="stat"><div class="stat-label">Mode</div><div class="stat-value">{html.escape(context.mode)}</div></div>
+      <div class="stat"><div class="stat-label">Band</div><div class="stat-value">{html.escape(assessment.target.band)}</div></div>
       <div class="stat"><div class="stat-label">Risk</div><div class="stat-value score">{score}/100 ({html.escape(score_label)})</div></div>
     </div>
     {trophy_html}
     {attack_log_html}
+    {dual_band_html}
     {profiles_html}
     {review_plan_html}
     {artifacts_html}

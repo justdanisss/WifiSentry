@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 
-from payloads.models import WifiNetwork
+from core.models import WifiNetwork
 
 log = logging.getLogger(__name__)
 

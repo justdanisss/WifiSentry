@@ -2,6 +2,8 @@
 set -euo pipefail
 
 PROJECT_NAME="wifisentry"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+THIRD_PARTY_DIR="${PROJECT_ROOT}/third-party"
 
 REQUIRED_COMMANDS=(
   nmcli
@@ -11,6 +13,7 @@ REQUIRED_COMMANDS=(
   aireplay-ng
   hcxdumptool
   hcxpcapngtool
+  wash
   reaver
   hashcat
   zcat
@@ -23,6 +26,77 @@ log() {
 fail() {
   printf '[prelaunch][error] %s\n' "$1" >&2
   exit 1
+}
+
+ensure_third_party_layout() {
+  log "Preparing third-party integration layout..."
+
+  mkdir -p \
+    "${THIRD_PARTY_DIR}/sources" \
+    "${THIRD_PARTY_DIR}/datasets" \
+    "${THIRD_PARTY_DIR}/fixtures/sample_outputs" \
+    "${THIRD_PARTY_DIR}/fixtures/sample_pcaps" \
+    "${THIRD_PARTY_DIR}/licenses" \
+    "${THIRD_PARTY_DIR}/patches" \
+    "${THIRD_PARTY_DIR}/templates"
+
+  if [[ ! -f "${THIRD_PARTY_DIR}/README.md" ]]; then
+    cat > "${THIRD_PARTY_DIR}/README.md" <<'EOF'
+# third-party
+
+See the tracked copy of this file in the repository for the intended layout
+and maintenance notes.
+EOF
+  fi
+
+  if [[ ! -f "${THIRD_PARTY_DIR}/manifest.json" ]]; then
+    cat > "${THIRD_PARTY_DIR}/manifest.json" <<'EOF'
+{
+  "schema_version": 1,
+  "generated_by": "prelaunch.sh",
+  "project": "wifisentry",
+  "sources": [],
+  "datasets": [],
+  "fixtures": []
+}
+EOF
+  fi
+
+  if [[ ! -f "${THIRD_PARTY_DIR}/datasets/vendor_oui_overrides.json" ]]; then
+    cat > "${THIRD_PARTY_DIR}/datasets/vendor_oui_overrides.json" <<'EOF'
+{
+  "_comment": "Optional local vendor and OUI hints. Add entries when needed.",
+  "entries": []
+}
+EOF
+  fi
+
+  if [[ ! -f "${THIRD_PARTY_DIR}/datasets/protocol_exposure_rules.json" ]]; then
+    cat > "${THIRD_PARTY_DIR}/datasets/protocol_exposure_rules.json" <<'EOF'
+{
+  "_comment": "Optional planner or report enrichment rules derived from third-party research.",
+  "families": []
+}
+EOF
+  fi
+
+  if [[ ! -f "${THIRD_PARTY_DIR}/templates/source_entry.example.json" ]]; then
+    cat > "${THIRD_PARTY_DIR}/templates/source_entry.example.json" <<'EOF'
+{
+  "name": "example-source",
+  "url": "https://github.com/example/example-repo",
+  "commit": "replace-with-commit-sha",
+  "license": "replace-with-license",
+  "local_path": "sources/example-source",
+  "purpose": "Short explanation of why this source is kept here.",
+  "consumed_artifacts": [
+    "datasets/example-derived.json"
+  ]
+}
+EOF
+  fi
+
+  log "Third-party layout ready at ${THIRD_PARTY_DIR}"
 }
 
 need_root() {
@@ -131,6 +205,8 @@ verify_commands() {
 main() {
   need_root
   log "Preparing dependencies for ${PROJECT_NAME}..."
+
+  ensure_third_party_layout
 
   local distro
   distro="$(detect_distro)"

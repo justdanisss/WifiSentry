@@ -1,6 +1,7 @@
 .codex/
 .agents/
 legacy/
+third-party/
 
 # Python cache and bytecode
 __pycache__/

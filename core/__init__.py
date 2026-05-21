@@ -1,0 +1,1 @@
+# wifisentry core package

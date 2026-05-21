@@ -52,6 +52,7 @@ class WorkspaceManager:
         files = {
             "pmkid": f"{self.safe_bssid}_pmkid.pcapng",
             "eapol_prefix": f"{self.safe_bssid}_eapol",
+            "client_scan_prefix": f"{self.safe_bssid}_clients",
             "hash": "target_hashes.hc22000",
             "potfile": "hashcat.potfile",
             "wps_loot": "WPS_LOOT.json",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from payloads.models import AttackVector, RiskFinding, WifiNetwork
+from core.models import AttackVector, RiskFinding, WifiNetwork
 
 
 _SSID_PATTERNS = [
@@ -86,6 +86,31 @@ def analyze_network(network: WifiNetwork) -> tuple[list[RiskFinding], list[Attac
                 difficulty="Low",
                 description="WPS increases attack surface and should be disabled unless there is a strict operational need.",
                 tools=("wash", "reaver"),
+            )
+        )
+
+    if network.is_wpa3_transition:
+        findings.append(
+            RiskFinding(
+                severity="Low",
+                title="WPA3 transition mode advertised",
+                evidence=f"Security field: {network.security}",
+                recommendation=(
+                    "Use WPA3-only mode when client compatibility allows it. "
+                    "Transition mode keeps WPA2-Personal available for legacy clients."
+                ),
+            )
+        )
+        vectors.append(
+            AttackVector(
+                name="WPA2 transition compatibility exposure",
+                feasible=False,
+                difficulty="Medium",
+                description=(
+                    "WPA3 transition mode improves compatibility but still allows WPA2-Personal "
+                    "associations, so password strength and legacy client hygiene remain relevant."
+                ),
+                tools=("hashcat", "aircrack-ng"),
             )
         )
 
