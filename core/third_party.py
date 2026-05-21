@@ -34,11 +34,13 @@ log = logging.getLogger(__name__)
 # Root of the third-party tree (relative to the project root, where main.py lives)
 # ---------------------------------------------------------------------------
 _TP_ROOT = Path(__file__).parent.parent / "third-party"
+_PROJECT_VENV_PY = Path(__file__).parent.parent / ".venv" / "bin" / "python"
 
 _KR00K_ESET = _TP_ROOT / "kr00k" / "malware-research" / "kr00k" / "kr00k.py"
 _DRAGONFORCE   = _TP_ROOT / "dragonforce" / "dragonforce" / "dragonforce"  # compiled binary
 _DRAGONTIME    = _TP_ROOT / "dragonforce" / "dragondrain-and-time" / "src" / "dragontime"
 _FRAGATTACK    = _TP_ROOT / "fragattacks" / "research" / "fragattack.py"
+_FRAGATTACK_VENV_PY = _TP_ROOT / "fragattacks" / "research" / "venv" / "bin" / "python"
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +64,13 @@ class ThirdPartyResult:
 
 def _python() -> str:
     return sys.executable
+
+
+def _preferred_python(*candidates: Path) -> str:
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return str(candidate)
+    return _python()
 
 
 def _tool_available(path: Path) -> bool:
@@ -110,7 +119,7 @@ def run_kr00k_pcap(
     output_file = workspace / "kr00k_analysis.txt"
 
     log.info("[kr00k] Analysing capture %s for Kr00k vulnerability...", pcap_path.name)
-    cmd = [_python(), str(_KR00K_ESET), "-f", str(pcap_path)]
+    cmd = [_preferred_python(_PROJECT_VENV_PY), str(_KR00K_ESET), "-f", str(pcap_path)]
     try:
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=60
@@ -267,7 +276,7 @@ def run_fragattacks_ping_test(
         )
 
     cmd = [
-        _python(), str(_FRAGATTACK),
+        _preferred_python(_FRAGATTACK_VENV_PY, _PROJECT_VENV_PY), str(_FRAGATTACK),
         interface, test_name,
         "--bssid", bssid,
         "--config", str(client_conf),

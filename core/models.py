@@ -160,6 +160,9 @@ class AssessmentResult:
     # Populated when another AP with the same SSID exists on a different band.
     dual_band_result: DualBandResult | None = None
 
+    # Optional results produced by research-oriented third-party integrations.
+    third_party_results: list["ThirdPartyResult"] = dataclasses.field(default_factory=list)
+
     def add_attack_step(self, step_description: str) -> None:
         self.attack_log.append(step_description)
 
